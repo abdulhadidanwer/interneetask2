@@ -1,0 +1,305 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather Forecast</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .weather-card {
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            background-color: rgba(255, 255, 255, 0.15);
+        }
+        .weather-icon {
+            filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.3));
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-blue-500 to-indigo-700 text-white">
+    <div id="app" class="container mx-auto px-4 py-8">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold mb-2">Weather Forecast</h1>
+            <p class="text-lg">Get real-time weather updates for any location</p>
+        </header>
+
+        <div class="max-w-md mx-auto">
+            <div class="flex mb-6">
+                <input 
+                    type="text" 
+                    id="city-input" 
+                    placeholder="Enter city name..." 
+                    class="flex-1 px-4 py-2 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-white text-gray-800"
+                >
+                <button 
+                    id="search-btn" 
+                    class="bg-white text-blue-600 px-4 py-2 rounded-r-lg hover:bg-gray-100 transition"
+                >
+                    Search
+                </button>
+            </div>
+
+            <button 
+                id="location-btn" 
+                class="w-full bg-indigo-600 text-white px-4 py-2 rounded-lg mb-8 hover:bg-indigo-700 transition flex items-center justify-center"
+            >
+                <i class="fas fa-location-arrow mr-2"></i> Use Current Location
+            </button>
+
+            <div id="weather-container" class="hidden">
+                <div id="weather-card" class="weather-card rounded-xl p-6 mb-8">
+                    <div class="flex justify-between items-center mb-4">
+                        <div>
+                            <h2 id="location" class="text-2xl font-bold">New York, US</h2>
+                            <p id="date" class="text-sm opacity-80">Monday, January 1</p>
+                        </div>
+                        <div id="weather-icon" class="weather-icon text-4xl">
+                            <i class="fas fa-sun"></i>
+                        </div>
+                    </div>
+
+                    <div id="temperature" class="text-6xl font-bold mb-2">24°C</div>
+                    <p id="conditions" class="text-lg italic mb-4">Sunny</p>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-white bg-opacity-10 p-3 rounded-lg">
+                            <div class="flex items-center">
+                                <i class="fas fa-tint mr-2"></i>
+                                <span>Humidity</span>
+                            </div>
+                            <div id="humidity" class="text-xl font-bold">65%</div>
+                        </div>
+                        <div class="bg-white bg-opacity-10 p-3 rounded-lg">
+                            <div class="flex items-center">
+                                <i class="fas fa-wind mr-2"></i>
+                                <span>Wind</span>
+                            </div>
+                            <div id="wind" class="text-xl font-bold">12 km/h</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="error-message" class="hidden bg-red-500 text-white p-4 rounded-lg mb-8"></div>
+
+            <div id="loading" class="hidden text-center py-8">
+                <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-white mx-auto mb-4"></div>
+                <p>Loading weather data...</p>
+            </div>
+        </div>
+    </div>
+<script>        // API configuration
+        const API_KEY = 'f0f78f3d96e4c58abed33d26687f7900'; // Replace with your actual API key
+        const BASE_URL = 'https://api.openweathermap.org/data/2.5/weather';
+
+        // DOM elements
+        const cityInput = document.getElementById('city-input');
+        const searchBtn = document.getElementById('search-btn');
+        const locationBtn = document.getElementById('location-btn');
+        const weatherContainer = document.getElementById('weather-container');
+        const weatherCard = document.getElementById('weather-card');
+        const errorMessage = document.getElementById('error-message');
+        const loading = document.getElementById('loading');
+
+        // Weather data elements
+        const locationEl = document.getElementById('location');
+        const dateEl = document.getElementById('date');
+        const tempEl = document.getElementById('temperature');
+        const conditionsEl = document.getElementById('conditions');
+        const humidityEl = document.getElementById('humidity');
+        const windEl = document.getElementById('wind');
+        const weatherIcon = document.getElementById('weather-icon');
+
+        // Background images for different weather conditions
+        const weatherBackgrounds = {
+            'clear': 'bg-gradient-to-br from-blue-400 to-yellow-300',
+            'clouds': 'bg-gradient-to-br from-gray-300 to-gray-500',
+            'rain': 'bg-gradient-to-br from-gray-500 to-blue-700',
+            'snow': 'bg-gradient-to-br from-gray-100 to-blue-200',
+            'thunderstorm': 'bg-gradient-to-br from-gray-700 to-indigo-900',
+            'drizzle': 'bg-gradient-to-br from-gray-400 to-blue-600',
+            'mist': 'bg-gradient-to-br from-gray-200 to-gray-400',
+            'default': 'bg-gradient-to-br from-blue-500 to-indigo-700'
+        };
+
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', () => {
+            // Set current date
+            updateDate();
+            
+            // Event listeners
+            searchBtn.addEventListener('click', searchWeather);
+            cityInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') searchWeather();
+            });
+            locationBtn.addEventListener('click', getLocationWeather);
+        });
+
+        // Update current date display
+        function updateDate() {
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            const today = new Date().toLocaleDateString('en-US', options);
+            dateEl.textContent = today;
+        }
+
+        // Search weather by city name
+        async function searchWeather() {
+            const city = cityInput.value.trim();
+            if (!city) {
+                showError('Please enter a city name');
+                return;
+            }
+
+            try {
+                showLoading();
+                const url = `${BASE_URL}?q=${city}&appid=${API_KEY}&units=metric`;
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.cod !== 200) {
+                    throw new Error(data.message || 'City not found');
+                }
+
+                displayWeather(data);
+                hideError();
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Get weather by current location
+        function getLocationWeather() {
+            if (!navigator.geolocation) {
+                showError('Geolocation is not supported by your browser');
+                return;
+            }
+
+            showLoading();
+            navigator.geolocation.getCurrentPosition(async (position) => {
+                try {
+                    const { latitude, longitude } = position.coords;
+                    const url = `${BASE_URL}?lat=${latitude}&lon=${longitude}&appid=${API_KEY}&units=metric`;
+                    const response = await fetch(url);
+                    const data = await response.json();
+
+                    if (data.cod !== 200) {
+                        throw new Error(data.message || 'Location not found');
+                    }
+
+                    displayWeather(data);
+                    hideError();
+                } catch (error) {
+                    showError(error.message);
+                } finally {
+                    hideLoading();
+                }
+            }, (error) => {
+                showError('Unable to retrieve your location');
+                hideLoading();
+            });
+        }
+
+        // Display weather data
+        function displayWeather(data) {
+            const { name, sys, main, weather, wind } = data;
+            const { country } = sys;
+            const { temp, humidity } = main;
+            const { icon, main: condition, description } = weather[0];
+            
+            // Update UI
+            locationEl.textContent = `${name}, ${country}`;
+            tempEl.textContent = `${Math.round(temp)}°C`;
+            conditionsEl.textContent = description;
+            humidityEl.textContent = `${humidity}%`;
+            windEl.textContent = `${Math.round(wind.speed * 3.6)} km/h`;
+            
+            // Update weather icon
+            updateWeatherIcon(condition, icon);
+            
+            // Update background based on weather condition
+            updateWeatherBackground(condition.toLowerCase());
+            
+            // Show weather container
+            weatherContainer.classList.remove('hidden');
+        }
+
+        // Update weather icon based on condition
+        function updateWeatherIcon(condition, iconCode) {
+            let iconClass = 'fas fa-';
+            
+            switch (condition.toLowerCase()) {
+                case 'clear':
+                    iconClass += iconCode.includes('n') ? 'moon' : 'sun';
+                    break;
+                case 'clouds':
+                    iconClass += 'cloud';
+                    break;
+                case 'rain':
+                    iconClass += 'cloud-rain';
+                    break;
+                case 'snow':
+                    iconClass += 'snowflake';
+                    break;
+                case 'thunderstorm':
+                    iconClass += 'bolt';
+                    break;
+                case 'drizzle':
+                    iconClass += 'cloud-rain';
+                    break;
+                case 'mist':
+                case 'smoke':
+                case 'haze':
+                case 'dust':
+                case 'fog':
+                case 'sand':
+                case 'ash':
+                case 'squall':
+                case 'tornado':
+                    iconClass += 'smog';
+                    break;
+                default:
+                    iconClass += 'cloud-sun';
+            }
+            
+            weatherIcon.innerHTML = `<i class="${iconClass}"></i>`;
+        }
+
+        // Update background based on weather condition
+        function updateWeatherBackground(condition) {
+            const backgroundClass = weatherBackgrounds[condition] || weatherBackgrounds['default'];
+            document.body.className = `min-h-screen ${backgroundClass} text-white`;
+        }
+
+        // Show loading spinner
+        function showLoading() {
+            loading.classList.remove('hidden');
+            weatherContainer.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+        }
+
+        // Hide loading spinner
+        function hideLoading() {
+            loading.classList.add('hidden');
+        }
+
+        // Show error message
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.remove('hidden');
+            weatherContainer.classList.add('hidden');
+        }
+
+        // Hide error message
+        function hideError() {
+            errorMessage.classList.add('hidden');
+        }
+</script>
+
+</body>
+</html>
+
+```
